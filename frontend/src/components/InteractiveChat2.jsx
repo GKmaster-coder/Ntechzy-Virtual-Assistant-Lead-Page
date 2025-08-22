@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { createUser } from "../api/userApi"; // backend API
+import chatSteps from "../data/chatSteps";
 
 const InteractiveChat2 = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -13,66 +14,6 @@ const InteractiveChat2 = () => {
 
   const messagesEndRef = useRef(null);
 
-  const chatSteps = [
-    {
-      type: "welcome",
-      message:
-        "Welcome! We'll help determine if you qualify for our program. This will only take a few moments. All information is confidential.",
-      controls: [{ type: "button", label: "Start Assessment", value: "start" }],
-    },
-    {
-      type: "question",
-      message: "Were you exposed to the substance between 1990-2010?",
-      controls: [
-        { type: "button", label: "Yes", value: "yes" },
-        { type: "button", label: "No", value: "no" },
-      ],
-    },
-    {
-      type: "question",
-      message: "When did the exposure occur?",
-      controls: [
-        { type: "button", label: "Before 2005", value: "pre-2005" },
-        { type: "button", label: "2005-2015", value: "2005-2015" },
-        { type: "button", label: "After 2015", value: "post-2015" },
-      ],
-    },
-    {
-      type: "question",
-      message: "Have you received a medical diagnosis related to this exposure?",
-      controls: [
-        { type: "button", label: "Yes, I have a diagnosis", value: "diagnosed" },
-        { type: "button", label: "No official diagnosis", value: "undiagnosed" },
-        { type: "button", label: "I suspect but not confirmed", value: "suspected" },
-      ],
-    },
-    {
-      type: "question",
-      message: "Have you already hired a lawyer for this case?",
-      controls: [
-        { type: "button", label: "Yes", value: "already-lawyer" },
-        { type: "button", label: "No", value: "no-lawyer" },
-      ],
-    },
-    {
-      type: "message",
-      message:
-        "Based on your answers, you may qualify! Let’s get your contact details so our legal team can review your case.",
-      controls: [{ type: "button", label: "Continue", value: "continue" }],
-    },
-    // Conversational form fields
-    { type: "form-field", field: "name", message: "What’s your full name?" },
-    { type: "form-field", field: "phone", message: "Please share your phone number." },
-    { type: "form-field", field: "email", message: "What’s your email address?" },
-    { type: "form-field", field: "zip", message: "Enter your ZIP code." },
-    { type: "form-field", field: "agree", message: "Do you agree to be contacted? (yes/no)" },
-    { type: "success", message: "✅ Thanks! Your details have been submitted successfully." },
-    {
-      type: "failure",
-      message: "It looks like you may already be represented, so we cannot proceed.",
-    },
-  ];
-
   // Typing + message display
   useEffect(() => {
     if (currentStep >= chatSteps.length) return;
@@ -82,20 +23,19 @@ const InteractiveChat2 = () => {
       setIsTyping(false);
       const step = chatSteps[currentStep];
       setConversation((prev) => [...prev, { from: "bot", text: step.message }]);
-    }, 800); // faster typing duration
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [currentStep]);
 
-  // Auto scroll to bottom on conversation update
+  // Auto scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation]);
 
-  // Handle user response
+  // Handle response
   const handleResponse = async (value, stepType) => {
     const step = chatSteps[currentStep];
-
     setConversation((prev) => [...prev, { from: "user", text: value }]);
 
     if (stepType === "welcome" && value === "start") {
@@ -126,14 +66,33 @@ const InteractiveChat2 = () => {
 
     if (stepType === "form-field") {
       let cleaned = value.trim();
+      let isValid = true;
+
+      // Validation rules
+      if (step.field === "name" && cleaned.length < 3) isValid = false;
+      if (step.field === "phone" && !/^\d{10}$/.test(cleaned)) isValid = false;
+      if (step.field === "email" && !/^\S+@\S+\.\S+$/.test(cleaned)) isValid = false;
+      if (step.field === "zip" && !/^\d{5,6}$/.test(cleaned)) isValid = false;
+      if (step.field === "agree" && !["yes", "no"].includes(cleaned.toLowerCase()))
+        isValid = false;
+
+      if (!isValid) {
+        setConversation((prev) => [
+          ...prev,
+          { from: "error", text: "⚠️ You entered a wrong Data." },
+          { from: "bot", text: step.message },
+        ]);
+        setInputValue("");
+        return;
+      }
+
+      // If valid
       if (step.field === "agree") {
         cleaned = cleaned.toLowerCase() === "yes";
       }
       setUserResponses((prev) => ({ ...prev, [step.field]: cleaned }));
+      setInputValue("");
 
-      setInputValue(""); // Clear input for next field
-
-      // If last field → submit details
       if (step.field === "agree") {
         try {
           setLoading(true);
@@ -157,23 +116,18 @@ const InteractiveChat2 = () => {
     }
   };
 
-  // Enter key handler on input field
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && inputValue.trim() && !loading) {
       handleResponse(inputValue, "form-field");
     }
   };
 
-  // Controls UI based on step
+  // Controls
   const renderControls = () => {
     const step = chatSteps[currentStep];
     if (!step || isTyping) return null;
 
-    if (
-      step.type === "welcome" ||
-      step.type === "question" ||
-      step.type === "message"
-    ) {
+    if (step.type === "welcome" || step.type === "question" || step.type === "message") {
       return (
         <div className="flex flex-wrap gap-3 mt-4">
           {step.controls?.map((control, i) => (
@@ -207,7 +161,6 @@ const InteractiveChat2 = () => {
       );
     }
 
-    // success or failure buttons
     if (step.type === "failure" || step.type === "success") {
       return (
         <motion.button
@@ -237,16 +190,31 @@ const InteractiveChat2 = () => {
             key={i}
             initial={{ opacity: 0, y: msg.from === "bot" ? 20 : 0 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex ${msg.from === "bot" ? "items-start" : "justify-end"}`}
+            className={`flex ${
+              msg.from === "bot"
+                ? "items-start"
+                : msg.from === "error"
+                ? "items-start"
+                : "justify-end"
+            }`}
           >
             {msg.from === "bot" && (
               <div className="w-10 h-10 flex items-center justify-center bg-blue-500 rounded-full mr-3">
                 <img src="/avtar.png" alt="bot" className="w-full h-full rounded-full" />
               </div>
             )}
+            {msg.from === "error" && (
+              <div className="w-10 h-10 flex items-center justify-center bg-red-500 rounded-full mr-3">
+                ⚠️
+              </div>
+            )}
             <div
               className={`px-4 py-3 rounded-2xl shadow max-w-[80%] ${
-                msg.from === "bot" ? "bg-gray-100 rounded-tl-none" : "bg-blue-100 rounded-tr-none"
+                msg.from === "bot"
+                  ? "bg-gray-100 rounded-tl-none"
+                  : msg.from === "error"
+                  ? "bg-red-100 text-red-700 rounded-tl-none"
+                  : "bg-blue-100 rounded-tr-none"
               }`}
             >
               {msg.text}
