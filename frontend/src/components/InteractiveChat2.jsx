@@ -146,18 +146,34 @@ const InteractiveChat2 = () => {
       );
     }
 
+    // ✅ Updated: input + Next button
     if (step.type === "form-field") {
       return (
-        <input
-          type={step.field === "phone" ? "tel" : "text"}
-          placeholder="Type your answer..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyPress}
-          className="w-full border p-2 rounded"
-          disabled={loading}
-          autoFocus
-        />
+        <div className="flex items-center gap-2 mt-4">
+          <input
+            type={step.field === "phone" ? "tel" : "text"}
+            placeholder="Type your answer..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyPress}
+            className="flex-1 border p-2 rounded"
+            disabled={loading}
+            autoFocus
+          />
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (inputValue.trim() && !loading) {
+                handleResponse(inputValue, "form-field");
+              }
+            }}
+            disabled={loading || !inputValue.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow"
+          >
+            Next
+          </motion.button>
+        </div>
       );
     }
 
